@@ -155,9 +155,13 @@ async def upload(file : UploadFile = File(...)): # type: ignore
         appended_count = len(new_df)
 
     # Update totals
-    df_today = df[df['Date'] == data_now.strftime('%Y-%m-%d')]
     # Important: total_now should reflect only what is ACTIVE right now, not historical rows.
     # We compute the usernames currently active on Mikrotik and sum only matching CSV rows.
+    df['Date'] = pd.to_datetime(df['Date'],errors="coerce")
+
+    df_today = df[df['Date'].dt.date == data_now]
+
+    total_now = df_today['Price'].sum()
 
     total_all = df['Price'].sum()
     number_of_rows = len(df)
@@ -179,7 +183,7 @@ async def upload(file : UploadFile = File(...)): # type: ignore
 
     return {
         "appended": appended_count,
-        "total_now": float(total) if not pd.isna(total) else 0.0,
+        "total_now": float(total_now) if not pd.isna(total_now) else 0.0,
         "total_all": float(total_all) if not pd.isna(total_all) else 0.0,
         "number_of_rows": int(number_of_rows),
         "all_name": all_name,
