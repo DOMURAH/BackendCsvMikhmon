@@ -158,18 +158,6 @@ async def upload(file : UploadFile = File(...)): # type: ignore
     df_today = df[df['Date'] == data_now.strftime('%Y-%m-%d')]
     # Important: total_now should reflect only what is ACTIVE right now, not historical rows.
     # We compute the usernames currently active on Mikrotik and sum only matching CSV rows.
-    active_connections = get_active_connections()  # list/dicts from /ip/hotspot/active
-
-    active_usernames = {
-        str(conn.get('user', '')).lower()
-        for conn in active_connections
-        if conn.get('user', None) not in (None, '')
-    }
-
-    if active_usernames:
-        total = df_today[df_today['Username'].str.lower().isin(active_usernames)]['Price'].sum()
-    else:
-        total = 0
 
     total_all = df['Price'].sum()
     number_of_rows = len(df)
