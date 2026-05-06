@@ -1,0 +1,10 @@
+import mysql.connector
+
+db = mysql.connector.connect(
+    host="gateway01.us-east-1.prod.aws.tidbcloud.com",
+    user="4BtnYynyA2LKuR9.root",
+    password="ehCOCdwW7MinZKIj",
+    database="application"
+)
+
+cursor = db.cursor(dictionary=True)
