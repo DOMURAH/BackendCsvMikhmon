@@ -86,7 +86,7 @@ def login(users : Login,response : Response): # type: ignore
 
 @router.post("/upload")
 async def upload(file : UploadFile = File(...)): # type: ignore
-    from datetime import datetime
+    from datetime import datetime,date
     import pandas as pd
     import csv
 
@@ -94,7 +94,7 @@ async def upload(file : UploadFile = File(...)): # type: ignore
 
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 
-    data_now = datetime.now().date()
+    data_now =  datetime.now().date()
 
     df_aujourd_hui = df[df['Date'].dt.date == data_now]
 
@@ -133,7 +133,7 @@ async def upload(file : UploadFile = File(...)): # type: ignore
     df_api['api_time'] = df_api['comment_parsed'].dt.time
 
     # map profile to price
-    df_api['Price'] = df_api['profile'].map({'1H': 500, '2h': 1000, '3mois': 40000}).fillna(0)
+    df_api['Price'] = df_api['profile'].map({'1H': 500, '2h': 1000, '3mois': 40000,'500Ar-45min': 500,'1000Ar-1h30':1000}).fillna(0)
 
     # Append only new df_api users not in uploaded CSV
     df['№'] = df['№'].astype(int)
@@ -147,7 +147,7 @@ async def upload(file : UploadFile = File(...)): # type: ignore
         next_no = df['№'].max() + 1
         new_df['№'] = range(next_no, next_no + len(new_df))
         new_df['Date'] = new_df['api_date']
-        new_df['Time'] = new_df['api_time'].fillna(pd.NaT).astype(str).fillna('00:00:00')
+        new_df['Time'] = new_df['api_time']
         new_df['Profile'] = new_df['profile']
         new_df['Comment'] = new_df['comment']
         new_selected = new_df[['№', 'Date', 'Time', 'Username', 'Profile', 'Comment', 'Price']]
@@ -165,7 +165,6 @@ async def upload(file : UploadFile = File(...)): # type: ignore
 
     total_all = df['Price'].sum()
     number_of_rows = len(df)
-
 
     all_name = df['Username'].tolist()
 
