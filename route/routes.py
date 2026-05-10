@@ -7,6 +7,14 @@ import pandas as pd
 import json
 from routerOS import get_all_users, get_active_connections
 from datetime import datetime
+from dotenv import load_dotenv
+from supabase import create_client
+import os
+
+
+load_dotenv()
+
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 router = APIRouter()
 
@@ -84,13 +92,13 @@ def login(users : Login,response : Response): # type: ignore
     else:
         return {"message":"Identifiant incorrect !","acces":0} # type: ignore
 
-@router.post("/upload")
-async def upload(file : UploadFile = File(...)): # type: ignore
-    from datetime import datetime,date
+@router.post("/process")
+def process(file : UploadFile = File(...)):
+    from datetime import datetime, date
     import pandas as pd
     import csv
 
-    df = pd.read_csv(file.file,skiprows=1)
+    df = pd.read_csv(file.file, skiprows=1)
 
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 
@@ -100,19 +108,19 @@ async def upload(file : UploadFile = File(...)): # type: ignore
 
     all_user = get_all_users()[2:]  # Skip first 2 entries (static users)
 
-    # Clean API data
+        # Clean API data
     df_api = pd.DataFrame(all_user)
 
-    # username normalisé pour le merge
+        # username normalisé pour le merge
     df_api['Username'] = df_api['name'].astype(str).str.lower()
 
     comment_str = df_api['comment'].fillna('').astype(str)
 
-    # Cas 1) comment = "YYYY-MM-DD HH:MM:SS"
+        # Cas 1) comment = "YYYY-MM-DD HH:MM:SS"
     iso_dt = pd.to_datetime(comment_str, format='%Y-%m-%d %H:%M:%S', errors='coerce')
 
-    # Cas 2) comment = "up-352-05.03.26-"  => reconstruit "20YY-MM-DD" (heure inconnue)
-    # On extrait MM, DD, YY
+        # Cas 2) comment = "up-352-05.03.26-"  => reconstruit "20YY-MM-DD" (heure inconnue)
+        # On extrait MM, DD, YY
 
     mm_dd_yy = comment_str.str.extract(r'up-\d*-(\d{2})\.(\d{2})\.(\d{2})-')
     mm = mm_dd_yy[0]
@@ -161,6 +169,12 @@ async def upload(file : UploadFile = File(...)): # type: ignore
 
     df_today = df[df['Date'].dt.date == data_now]
 
+    # Ne garder que les lignes dont Time > 00:00:00
+    # Time est une string "HH:MM:SS" dans ton CSV
+    df_today['Time_parsed'] = pd.to_datetime(df_today['Time'], format='%H:%M:%S', errors='coerce').dt.time
+    threshold = datetime.strptime("00:00:00", "%H:%M:%S").time()
+    df_today = df_today[df_today['Time_parsed'] > threshold]
+
     total_now = df_today['Price'].sum()
 
     total_all = df['Price'].sum()
@@ -169,16 +183,7 @@ async def upload(file : UploadFile = File(...)): # type: ignore
     all_name = df['Username'].tolist()
 
     # Save updated df to report CSV with summary
-    csv_path = "report-mikhmon-all.csv"
     total_price = total_all
-    summary_line = f"Selling Report all,,,,,Total,Ar {total_price:,.2f}\n"
-    header = "№,Date,Time,Username,Profile,Comment,Price\n"
-    df.to_csv(csv_path, index=False, header=False, mode='w')
-
-
-    # Response data
-    df_clean = df.replace([float('inf'), -float('inf'), float('nan')], 0).to_dict('records')
-    df_api_clean = df_api.replace([float('inf'), -float('inf'), float('nan')], 0).to_dict('records')
 
     return {
         "appended": appended_count,
@@ -186,11 +191,34 @@ async def upload(file : UploadFile = File(...)): # type: ignore
         "total_all": float(total_all) if not pd.isna(total_all) else 0.0,
         "number_of_rows": int(number_of_rows),
         "all_name": all_name,
-        "updated_data": df_clean,
-        "df_api": df_api_clean,
-        "user_upload": all_user
-    } # type: ignore
+        "user_upload": all_user,
+    } # t       
+
+
+@router.post("/upload")
+async def upload(file: UploadFile = File(...)): # type: ignore
+
+    from uuid import uuid4
+
+    filename = f"{uuid4()}.csv" 
+
+    with open(filename, 'wb') as buffer:
+        buffer.write(await file.read())
     
+    with open(filename,"rb") as f:
+        supabase.storage.from_('reports').upload(
+            path=filename,
+            file=f,
+            file_options = {"content_type": "text/csv"},
+        )
+
+    file_url = supabase.storage.from_("reports").get_public_url(filename)
+
+    return {
+        "file_url" : file_url
+    }
+
+
 @router.get("/mikrotik")
 def mikrotik():
     from routerOS import get_active_connections, get_all_users
@@ -207,6 +235,6 @@ def mikrotik():
         "active_connections": active_connections_count,
         "price": total_now,
         "all_user": all_user,
-        "date_user": date_user
+        "date_user": date_user,
     }
 
